@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Behavior Log</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --border: #dee2e6;
+    --border-strong: #adb5bd;
+    --text: #212529;
+    --text-muted: #6c757d;
+    --accent: #1a56db;
+    --accent-light: #e8f0fe;
+    --danger: #c0392b;
+    --success: #1a7a4a;
+    --success-light: #e6f4ed;
+    --warning: #856404;
+    --warning-light: #fff8e1;
+    --mono: 'Courier New', Courier, monospace;
+    --sans: system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+
+  header {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+
+  #student-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* Mode toggle */
+  .mode-tabs {
+    max-width: 780px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    overflow: hidden;
+    width: fit-content;
+  }
+
+  .mode-tab {
+    padding: 8px 24px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background: var(--surface);
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+  }
+
+  .mode-tab.active {
+    background: var(--text);
+    color: white;
+  }
+
+  .mode-tab:first-child { border-right: 1px solid var(--border-strong); }
+
+  /* Period tracker */
+  #period-tracker {
+    max-width: 780px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .period-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+
+  .period-pill.logged { background: var(--success); border-color: var(--success); color: white; }
+  .period-pill.skipped { background: var(--border); border-color: var(--border-strong); color: var(--text-muted); text-decoration: line-through; }
+
+  /* Cards */
+  .card {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    background: var(--text);
+    color: white;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-family: var(--mono);
+  }
+
+  .card-body { padding: 16px; }
+
+  /* Form fields */
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  label .hint { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+
+  input[type="date"], input[type="time"], input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--sans);
+    color: var(--text);
+    background: var(--surface);
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select { cursor: pointer; }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+
+  .radio-group, .check-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radio-group label, .check-group label { margin: 0; font-weight: 400; }
+
+  .radio-opt, .check-opt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+
+  .radio-opt:has(input:checked), .check-opt:has(input:checked) {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .radio-opt input, .check-opt input { cursor: pointer; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .conditional { display: none; }
+  .conditional.visible { display: block; }
+
+  /* Detail fields */
+  .detail-field {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--accent-light);
+    border: 1px solid #b8d0f7;
+    border-radius: 4px;
+  }
+
+  .detail-field label { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--accent); }
+  .detail-field textarea, .detail-field input { background: white; }
+
+  .sound-types { display: flex; flex-direction: column; gap: 8px; }
+  .sound-row { display: flex; align-items: center; gap: 10px; }
+  .count-field { width: 80px !important; font-family: var(--mono) !important; }
+  .desc-field { flex: 1; }
+
+  /* Incident */
+  .incident-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--warning-light);
+    border: 1px solid #f0c040;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--warning);
+    margin-bottom: 0;
+  }
+
+  .incident-toggle input { cursor: pointer; width: auto; }
+
+  .incident-fields {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--warning-light);
+    border: 1px solid #f0c040;
+    border-radius: 4px;
+  }
+
+  .incident-fields.visible { display: block; }
+  .incident-fields .field { margin-bottom: 12px; }
+
+  /* Submit */
+  .submit-row {
+    max-width: 780px;
+    margin: 0 auto;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #1445b0; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #145c38; }
+  .btn-secondary { background: var(--border); color: var(--text); }
+  .btn-secondary:hover { background: var(--border-strong); }
+
+  #submit-status { font-size: 13px; color: var(--success); font-weight: 600; }
+  #submit-status.error { color: var(--danger); }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--text);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: transform 0.2s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  .divider { max-width: 780px; margin: 0 auto 16px; border: none; border-top: 1px solid var(--border); }
+
+  /* ---- REPORT STYLES ---- */
+  #report-section { display: none; }
+  #report-section.visible { display: block; }
+  #log-section { display: block; }
+  #log-section.hidden { display: none; }
+
+  .report-controls {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .report-controls input[type="date"] { width: auto; }
+
+  #upload-area {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    border: 2px dashed var(--border-strong);
+    border-radius: 6px;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  #upload-area label { cursor: pointer; color: var(--accent); font-weight: 600; display: inline; margin: 0; }
+  #csv-file { display: none; }
+  #loaded-file { margin-top: 8px; font-size: 12px; color: var(--success); font-weight: 600; }
+
+  #summary-bar {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    display: none;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  #summary-bar.visible { display: flex; }
+
+  .summary-stat { display: flex; flex-direction: column; gap: 2px; }
+  .summary-stat .num { font-size: 22px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .summary-stat .lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .summary-divider { width: 1px; height: 32px; background: var(--border); }
+
+  .period-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin: 0 auto 12px; max-width: 780px; overflow: hidden; }
+
+  .period-card-header {
+    background: var(--text);
+    color: white;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-family: var(--mono);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .period-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge-skipped { background: #555; color: #ccc; }
+  .badge-absent { background: #7b1fa2; color: white; }
+  .badge-late { background: #e65100; color: white; }
+  .badge-present { background: var(--success); color: white; }
+  .badge-empty { background: #555; color: #999; }
+
+  .period-card-body { padding: 14px; }
+
+  .data-row { display: flex; gap: 8px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
+  .data-row:last-child { margin-bottom: 0; }
+  .data-label { font-weight: 600; color: var(--text-muted); min-width: 160px; flex-shrink: 0; font-size: 12px; }
+  .data-value { color: var(--text); }
+  .data-value.narrative { font-style: italic; color: #444; line-height: 1.5; }
+
+  .incident-section { margin-top: 10px; padding: 10px 12px; background: var(--warning-light); border: 1px solid #f0c040; border-radius: 4px; }
+  .incident-section .incident-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--warning); margin-bottom: 8px; }
+
+  .empty-period { color: var(--text-muted); font-size: 13px; font-style: italic; }
+
+  .warning-banner {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    padding: 10px 14px;
+    background: var(--warning-light);
+    border: 1px solid #f0c040;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--warning);
+    font-weight: 600;
+    display: none;
+  }
+
+  .warning-banner.visible { display: block; }
+
+  #email-section { max-width: 780px; margin: 16px auto 0; display: none; }
+  #email-section.visible { display: block; }
+  #email-section h2 { font-size: 13px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); }
+
+  #email-body {
+    width: 100%;
+    min-height: 360px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    resize: vertical;
+    line-height: 1.6;
+  }
+
+  .email-controls { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+  #copy-status { font-size: 13px; color: var(--success); font-weight: 600; }
+
+  /* Interval grid */
+  .interval-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .interval-controls input[type="number"] { width: 90px; }
+  .interval-controls .hint { font-size: 12px; color: var(--text-muted); }
+
+  .interval-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+  }
+
+  .interval-cell {
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 8px;
+    background: var(--surface);
+  }
+
+  .interval-cell .interval-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .interval-toggle { display: flex; gap: 4px; }
+
+  .interval-toggle label {
+    flex: 1;
+    margin: 0;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  .interval-toggle input { display: none; }
+
+  .interval-toggle label:has(input:checked).opt-on { background: var(--success); border-color: var(--success); color: white; }
+  .interval-toggle label:has(input:checked).opt-off { background: var(--danger); border-color: var(--danger); color: white; }
+  .interval-toggle label:has(input:checked).opt-na { background: var(--border-strong); border-color: var(--border-strong); color: white; }
+
+  .interval-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+  .interval-legend span { font-family: var(--mono); font-weight: 700; }
+
+  @media (max-width: 480px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Behavior Log <span id="student-name" style="font-family:var(--mono);font-size:13px;color:var(--text-muted);font-weight:normal;margin-left:8px"></span></h1>
+</header>
+
+<!-- Mode tabs -->
+<div class="mode-tabs">
+  <button class="mode-tab active" id="tab-log" onclick="switchMode('log')">Log</button>
+  <button class="mode-tab" id="tab-report" onclick="switchMode('report')">Report</button>
+</div>
+
+<!-- Period tracker (shown in both modes) -->
+<div id="period-tracker"></div>
+
+<!-- ============================================================ -->
+<!-- LOG SECTION -->
+<!-- ============================================================ -->
+<div id="log-section">
+
+<form id="log-form" autocomplete="off">
+
+  <div class="card">
+    <div class="card-header">Session</div>
+    <div class="card-body">
+      <div class="two-col">
+        <div class="field">
+          <label for="student">Student</label>
+          <input type="text" id="student" name="student" placeholder="Student name" required>
+        </div>
+        <div class="field">
+          <label for="observer">Observer</label>
+          <input type="text" id="observer" name="observer" placeholder="Observer name" required>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="date">Date</label>
+          <input type="date" id="date" name="date" required>
+        </div>
+        <div class="field">
+          <label for="period">Period</label>
+          <select id="period" name="period" required>
+            <option value="">— select —</option>
+            <option value="1st">1st</option>
+            <option value="2nd">2nd</option>
+            <option value="3rd">3rd</option>
+            <option value="Mentorship">Mentorship</option>
+            <option value="4th">4th</option>
+            <option value="5th">5th</option>
+            <option value="6th">6th</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Attendance</div>
+    <div class="card-body">
+      <div class="field">
+        <label>Status</label>
+        <div class="radio-group">
+          <label class="radio-opt"><input type="radio" name="attendance" value="Present" required> Present</label>
+          <label class="radio-opt"><input type="radio" name="attendance" value="Late"> Late</label>
+          <label class="radio-opt"><input type="radio" name="attendance" value="Skipped"> Skipped</label>
+          <label class="radio-opt"><input type="radio" name="attendance" value="Absent/sick"> Absent/sick</label>
+        </div>
+      </div>
+      <div class="field conditional" id="arrival-time-field">
+        <label for="arrival-time">Arrival time <span class="hint">clock time or minutes late</span></label>
+        <input type="text" id="arrival-time" name="arrival_time" placeholder="e.g. 9:35 or 10 min">
+      </div>
+    </div>
+  </div>
+
+  <div id="core-fields" class="conditional">
+
+    <div class="card">
+      <div class="card-header">On-Task Intervals</div>
+      <div class="card-body">
+        <div class="interval-controls">
+          <label for="class-duration" style="margin:0">Class duration</label>
+          <input type="number" id="class-duration" name="class_duration" min="5" max="120" step="5" value="50">
+          <span class="hint">minutes — generates 5-min intervals</span>
+        </div>
+        <div class="interval-grid" id="interval-grid"></div>
+        <div class="interval-legend">
+          <div><span>✓</span> On task</div>
+          <div><span>✗</span> Off task</div>
+          <div><span>—</span> N/A (tardy / event)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Behavior</div>
+      <div class="card-body">
+
+        <div class="field">
+          <label>Phone use during academic time</label>
+          <div class="radio-group">
+            <label class="radio-opt"><input type="radio" name="phone" value="No" onchange="toggleDetail('phone-detail', false)"> No</label>
+            <label class="radio-opt"><input type="radio" name="phone" value="Yes" onchange="toggleDetail('phone-detail', true)"> Yes</label>
+          </div>
+          <div class="detail-field conditional" id="phone-detail">
+            <label for="phone-log">Reminder interaction <span class="hint">log what was said/done</span></label>
+            <textarea id="phone-log" name="phone_log" placeholder="Describe the reminder interaction..."></textarea>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Disruptive sounds</label>
+          <div class="radio-group">
+            <label class="radio-opt"><input type="radio" name="sounds" value="No" onchange="toggleDetail('sounds-detail', false)"> No</label>
+            <label class="radio-opt"><input type="radio" name="sounds" value="Yes" onchange="toggleDetail('sounds-detail', true)"> Yes</label>
+          </div>
+          <div class="detail-field conditional" id="sounds-detail">
+            <div class="sound-types">
+              <div class="sound-row">
+                <label class="check-opt"><input type="checkbox" name="sound_clapping" value="Yes"> Clapping</label>
+                <input type="number" name="sound_clapping_count" min="0" placeholder="count" class="count-field">
+              </div>
+              <div class="sound-row">
+                <label class="check-opt"><input type="checkbox" name="sound_vocalization" value="Yes"> Vocalizations</label>
+                <input type="number" name="sound_vocalization_count" min="0" placeholder="count" class="count-field">
+              </div>
+              <div class="sound-row">
+                <label class="check-opt"><input type="checkbox" name="sound_blurts" value="Yes"> Blurts</label>
+                <input type="number" name="sound_blurts_count" min="0" placeholder="count" class="count-field">
+              </div>
+              <div class="sound-row">
+                <label class="check-opt"><input type="checkbox" name="sound_other" value="Yes"> Other</label>
+                <input type="text" name="sound_other_desc" placeholder="describe" class="desc-field">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Disrespectful or disruptive comments</label>
+          <div class="radio-group">
+            <label class="radio-opt"><input type="radio" name="comments" value="No" onchange="toggleDetail('comments-detail', false)"> No</label>
+            <label class="radio-opt"><input type="radio" name="comments" value="Yes" onchange="toggleDetail('comments-detail', true)"> Yes</label>
+          </div>
+          <div class="detail-field conditional" id="comments-detail">
+            <div class="two-col" style="margin-bottom:8px">
+              <div>
+                <label for="comments-count">Count</label>
+                <input type="number" id="comments-count" name="comments_count" min="0" placeholder="0">
+              </div>
+              <div></div>
+            </div>
+            <label for="comments-log">Log comment(s)</label>
+            <textarea id="comments-log" name="comments_log" placeholder="Log what was said..."></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Task Completion</div>
+      <div class="card-body">
+        <div class="two-col">
+          <div class="field">
+            <label for="tasks">Tasks completed</label>
+            <select id="tasks" name="tasks">
+              <option value="">— select —</option>
+              <option value="All">All</option>
+              <option value="Most">Most</option>
+              <option value="Some">Some</option>
+              <option value="None">None</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Arguing</label>
+            <div class="radio-group">
+              <label class="radio-opt"><input type="radio" name="arguing" value="No"> No</label>
+              <label class="radio-opt"><input type="radio" name="arguing" value="Yes"> Yes</label>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="task-narrative">Task completion notes <span class="hint">optional</span></label>
+          <textarea id="task-narrative" name="task_narrative" placeholder="Notes on task completion or arguing..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Observations</div>
+      <div class="card-body">
+        <div class="field">
+          <label for="observations">Narrative <span class="hint">behavior, teacher interaction, context</span></label>
+          <textarea id="observations" name="observations" placeholder="Describe student behavior and context..."></textarea>
+        </div>
+
+        <div class="field">
+          <label class="incident-toggle">
+            <input type="checkbox" id="incident-toggle" name="incident_occurred" value="Yes">
+            Incident occurred
+          </label>
+          <div class="incident-fields" id="incident-fields">
+            <div class="field">
+              <label>Emotional regulation</label>
+              <div class="radio-group">
+                <label class="radio-opt"><input type="radio" name="regulation" value="Stayed in class"> Stayed in class</label>
+                <label class="radio-opt"><input type="radio" name="regulation" value="Left and returned"> Left and returned</label>
+                <label class="radio-opt"><input type="radio" name="regulation" value="Left — no return"> Left — no return</label>
+              </div>
+            </div>
+            <div class="field conditional" id="elopement-time-field">
+              <label for="elopement-time">Elopement time</label>
+              <input type="time" id="elopement-time" name="elopement_time">
+            </div>
+            <div class="field">
+              <label for="antecedent">Antecedent <span class="hint">what happened before</span></label>
+              <textarea id="antecedent" name="antecedent" rows="2"></textarea>
+            </div>
+            <div class="field">
+              <label for="behavior">Behavior <span class="hint">what the student did</span></label>
+              <textarea id="behavior" name="behavior" rows="2"></textarea>
+            </div>
+            <div class="field">
+              <label for="consequence">Consequence <span class="hint">what happened after</span></label>
+              <textarea id="consequence" name="consequence" rows="2"></textarea>
+            </div>
+            <div class="field">
+              <label for="incident-time">Incident time <span class="hint">optional</span></label>
+              <input type="time" id="incident-time" name="incident_time">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- end core-fields -->
+
+  <hr class="divider">
+
+  <div class="submit-row">
+    <button type="submit" class="btn btn-primary">Log Period</button>
+    <span id="submit-status"></span>
+  </div>
+
+</form>
+</div><!-- end log-section -->
+
+<!-- ============================================================ -->
+<!-- REPORT SECTION -->
+<!-- ============================================================ -->
+<div id="report-section">
+
+  <div class="report-controls">
+    <input type="text" id="report-student" placeholder="Student (optional filter)">
+    <input type="date" id="report-date">
+    <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+  </div>
+
+  <div id="upload-area">
+    <p>Load your behavior log CSV to generate a report.</p>
+    <p style="margin-top:6px"><label for="csv-file">Choose CSV file</label> or drag and drop.</p>
+    <input type="file" id="csv-file" accept=".csv">
+    <p id="loaded-file" style="display:none"></p>
+  </div>
+
+  <div class="warning-banner" id="warning-banner"></div>
+
+  <div id="summary-bar">
+    <div class="summary-stat"><span class="num" id="stat-periods">0</span><span class="lbl">Periods</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="num" id="stat-skipped">0</span><span class="lbl">Skipped</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="num" id="stat-late">0</span><span class="lbl">Late</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="num" id="stat-absent">0</span><span class="lbl">Absent/sick</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="num" id="stat-incidents">0</span><span class="lbl">Incidents</span></div>
+  </div>
+
+  <div id="report-output"></div>
+
+  <div id="email-section">
+    <h2>Email Body</h2>
+    <textarea id="email-body" readonly></textarea>
+    <div class="email-controls">
+      <button class="btn btn-success" onclick="copyEmail()">Copy to clipboard</button>
+      <span id="copy-status"></span>
+    </div>
+  </div>
+
+</div><!-- end report-section -->
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// Shared
+// ============================================================
+const PERIODS = ['1st', '2nd', '3rd', 'Mentorship', '4th', '5th', '6th'];
+
+function getStudentNameFromURL() {
+  const parts = window.location.pathname.split('/');
+  for (let i = parts.length - 2; i >= 0; i--) {
+    if (parts[i] && !parts[i].includes('.')) return decodeURIComponent(parts[i]);
+  }
+  return '';
+}
+
+const studentField = document.getElementById('student');
+const observerField = document.getElementById('observer');
+
+// Pre-fill from URL path (if present) or last-used values, but always editable —
+// this form supports one observer logging many students, one student logged by
+// many observers, or any mix. Nothing is hard-locked to a single name.
+studentField.value = getStudentNameFromURL() || localStorage.getItem('last_student') || '';
+observerField.value = localStorage.getItem('last_observer') || '';
+
+function currentStudent() { return (studentField.value || 'Student').trim(); }
+function currentObserver() { return observerField.value.trim(); }
+
+function updateHeader() {
+  const s = currentStudent();
+  document.getElementById('student-name').textContent = s;
+  document.title = `Log — ${s}`;
+}
+updateHeader();
+studentField.addEventListener('input', () => { updateHeader(); renderTracker(); });
+document.getElementById('report-student').value = studentField.value;
+
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('date').value = today;
+document.getElementById('report-date').value = today;
+
+// ============================================================
+// Mode switching
+// ============================================================
+function switchMode(mode) {
+  const logSection = document.getElementById('log-section');
+  const reportSection = document.getElementById('report-section');
+  const tabLog = document.getElementById('tab-log');
+  const tabReport = document.getElementById('tab-report');
+
+  if (mode === 'log') {
+    logSection.classList.remove('hidden');
+    reportSection.classList.remove('visible');
+    tabLog.classList.add('active');
+    tabReport.classList.remove('active');
+  } else {
+    logSection.classList.add('hidden');
+    reportSection.classList.add('visible');
+    tabLog.classList.remove('active');
+    tabReport.classList.add('active');
+  }
+}
+
+// ============================================================
+// Period tracker
+// ============================================================
+function getLoggedPeriods() {
+  const key = `logged_${currentStudent()}_${today}`;
+  try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
+}
+
+function setLoggedPeriod(period, status) {
+  const key = `logged_${currentStudent()}_${today}`;
+  const logged = getLoggedPeriods();
+  logged[period] = status;
+  localStorage.setItem(key, JSON.stringify(logged));
+}
+
+function renderTracker() {
+  const logged = getLoggedPeriods();
+  const tracker = document.getElementById('period-tracker');
+  tracker.innerHTML = '';
+  PERIODS.forEach(p => {
+    const pill = document.createElement('div');
+    pill.className = 'period-pill';
+    const status = logged[p];
+    if (status === 'Skipped' || status === 'Absent/sick') {
+      pill.classList.add('skipped');
+      pill.textContent = `${p} (${status})`;
+    } else if (status) {
+      pill.classList.add('logged');
+      pill.textContent = `✓ ${p}`;
+    } else {
+      pill.textContent = p;
+    }
+    tracker.appendChild(pill);
+  });
+}
+
+renderTracker();
+
+// ============================================================
+// Form conditional logic
+// ============================================================
+const attendanceInputs = document.querySelectorAll('input[name="attendance"]');
+const coreFields = document.getElementById('core-fields');
+const arrivalField = document.getElementById('arrival-time-field');
+const incidentToggle = document.getElementById('incident-toggle');
+const incidentFields = document.getElementById('incident-fields');
+const regulationInputs = document.querySelectorAll('input[name="regulation"]');
+const elopementField = document.getElementById('elopement-time-field');
+
+attendanceInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    const val = input.value;
+    coreFields.classList.toggle('visible', val !== 'Skipped' && val !== 'Absent/sick');
+    arrivalField.classList.toggle('visible', val === 'Late');
+  });
+});
+
+incidentToggle.addEventListener('change', () => {
+  incidentFields.classList.toggle('visible', incidentToggle.checked);
+});
+
+regulationInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    elopementField.classList.toggle('visible',
+      input.value === 'Left and returned' || input.value === 'Left — no return');
+  });
+});
+
+function toggleDetail(id, show) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('visible', show);
+}
+
+// ============================================================
+// On-task interval grid
+// ============================================================
+const durationInput = document.getElementById('class-duration');
+const intervalGrid = document.getElementById('interval-grid');
+
+function minutesLabel(start) {
+  return `${start}–${start + 5}`;
+}
+
+function renderIntervalGrid(preserve) {
+  const duration = Math.max(5, parseInt(durationInput.value, 10) || 0);
+  const count = Math.ceil(duration / 5);
+  const prevValues = {};
+  if (preserve) {
+    intervalGrid.querySelectorAll('input[type="radio"]:checked').forEach(inp => {
+      prevValues[inp.name] = inp.value;
+    });
+  }
+  intervalGrid.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const start = i * 5;
+    const name = `interval_${i + 1}`;
+    const cell = document.createElement('div');
+    cell.className = 'interval-cell';
+    cell.innerHTML = `
+      <div class="interval-label">${minutesLabel(start)} min</div>
+      <div class="interval-toggle">
+        <label class="opt-on"><input type="radio" name="${name}" value="on">✓</label>
+        <label class="opt-off"><input type="radio" name="${name}" value="off">✗</label>
+        <label class="opt-na"><input type="radio" name="${name}" value="na">—</label>
+      </div>`;
+    if (prevValues[name]) {
+      cell.querySelector(`input[value="${prevValues[name]}"]`).checked = true;
+    }
+    intervalGrid.appendChild(cell);
+  }
+}
+
+durationInput.addEventListener('input', () => renderIntervalGrid(true));
+renderIntervalGrid(false);
+
+function getIntervalCount() {
+  return Math.ceil((Math.max(5, parseInt(durationInput.value, 10) || 0)) / 5);
+}
+
+function collectIntervals(fd) {
+  const count = getIntervalCount();
+  const symbols = { on: '✓', off: '✗', na: '—' };
+  const vals = [];
+  for (let i = 0; i < count; i++) {
+    const v = fd.get(`interval_${i + 1}`);
+    vals.push(v ? symbols[v] : '');
+  }
+  return vals.join(' ');
+}
+
+function resetIntervalGrid() {
+  intervalGrid.querySelectorAll('input[type="radio"]').forEach(i => i.checked = false);
+}
+
+// ============================================================
+// CSV
+// ============================================================
+const CSV_HEADERS = [
+  'student', 'observer',
+  'date', 'period', 'attendance', 'arrival_time',
+  'class_duration', 'intervals',
+  'phone', 'phone_log',
+  'sounds', 'sound_clapping', 'sound_clapping_count',
+  'sound_vocalization', 'sound_vocalization_count',
+  'sound_blurts', 'sound_blurts_count',
+  'sound_other', 'sound_other_desc',
+  'comments', 'comments_count', 'comments_log',
+  'tasks', 'arguing', 'task_narrative',
+  'observations',
+  'incident_occurred', 'regulation', 'elopement_time',
+  'antecedent', 'behavior', 'consequence', 'incident_time',
+  'submitted_at'
+];
+
+function escapeCSV(val) {
+  const s = String(val ?? '');
+  return (s.includes(',') || s.includes('"') || s.includes('\n'))
+    ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function rowToCSV(row) {
+  return CSV_HEADERS.map(h => escapeCSV(row[h] || '')).join(',');
+}
+
+function triggerDownload(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// Form submission
+// ============================================================
+document.getElementById('log-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const fd = new FormData(this);
+  const row = { submitted_at: new Date().toISOString() };
+  CSV_HEADERS.forEach(h => { row[h] = fd.get(h) || ''; });
+  row.intervals = collectIntervals(fd);
+
+  const period = row.period;
+  const attendance = row.attendance;
+
+  if (!period) { showStatus('Please select a period.', true); return; }
+
+  localStorage.setItem('last_student', row.student);
+  localStorage.setItem('last_observer', row.observer);
+
+  // Append to localStorage and download — keyed by student so multiple
+  // students logged on the same device don't overwrite each other's data.
+  const storageKey = `csv_${row.student}`;
+  let existing = localStorage.getItem(storageKey) || '';
+  if (!existing) existing = CSV_HEADERS.join(',') + '\n';
+  existing += rowToCSV(row) + '\n';
+  localStorage.setItem(storageKey, existing);
+  triggerDownload(existing, `${row.student}_behavior_log.csv`);
+
+  setLoggedPeriod(period, (attendance === 'Present' || attendance === 'Late') ? 'logged' : attendance);
+  renderTracker();
+  showToast(`${period} logged`);
+
+  const dateVal = document.getElementById('date').value;
+  const durationVal = durationInput.value;
+  const studentVal = studentField.value;
+  const observerVal = observerField.value;
+  this.reset();
+  document.getElementById('date').value = dateVal;
+  durationInput.value = durationVal;
+  studentField.value = studentVal;
+  observerField.value = observerVal;
+  resetIntervalGrid();
+  coreFields.classList.remove('visible');
+  arrivalField.classList.remove('visible');
+  incidentFields.classList.remove('visible');
+  elopementField.classList.remove('visible');
+  ['phone-detail','sounds-detail','comments-detail'].forEach(id => {
+    document.getElementById(id)?.classList.remove('visible');
+  });
+  document.getElementById('submit-status').textContent = '';
+});
+
+function showStatus(msg, isError) {
+  const el = document.getElementById('submit-status');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ============================================================
+// CSV loading for report
+// ============================================================
+let csvData = [];
+
+const fileInput = document.getElementById('csv-file');
+const uploadArea = document.getElementById('upload-area');
+
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.style.background = '#e8f0fe'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.background = ''; });
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault(); uploadArea.style.background = '';
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    csvData = parseCSV(e.target.result);
+    const lf = document.getElementById('loaded-file');
+    lf.textContent = `✓ ${file.name} (${csvData.length} rows)`;
+    lf.style.display = 'block';
+    generateReport();
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map(line => {
+    const vals = splitCSVLine(line);
+    const row = {};
+    headers.forEach((h, i) => { row[h] = (vals[i] || '').trim().replace(/^"|"$/g, ''); });
+    return row;
+  });
+}
+
+function splitCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') {
+      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (line[i] === ',' && !inQuotes) { result.push(current); current = ''; }
+    else current += line[i];
+  }
+  result.push(current);
+  return result;
+}
+
+// ============================================================
+// Report generation
+// ============================================================
+function generateReport() {
+  const reportDate = document.getElementById('report-date').value;
+  const studentFilter = document.getElementById('report-student').value.trim().toLowerCase();
+  if (!reportDate || csvData.length === 0) return;
+
+  let dayRows = csvData.filter(r => r.date === reportDate);
+  if (studentFilter) {
+    dayRows = dayRows.filter(r => (r.student || '').toLowerCase() === studentFilter);
+  }
+
+  // If rows span more than one student and no filter was given, the CSV
+  // likely combines multiple students (one-observer/many-students setup) —
+  // warn rather than silently merging their data into one report.
+  const distinctStudents = [...new Set(dayRows.map(r => r.student).filter(Boolean))];
+  const wb = document.getElementById('warning-banner');
+  if (!studentFilter && distinctStudents.length > 1) {
+    wb.textContent = `⚠ This date includes multiple students (${distinctStudents.join(', ')}). Enter a student name above to filter.`;
+    wb.classList.add('visible');
+    document.getElementById('summary-bar').classList.remove('visible');
+    document.getElementById('report-output').innerHTML = '';
+    document.getElementById('email-section').classList.remove('visible');
+    return;
+  }
+
+  // If the same period has rows from more than one observer, keep the most
+  // recently submitted one for the summary card, but flag it so nothing
+  // gets silently dropped.
+  const periodMap = {};
+  const periodObserverCounts = {};
+  PERIODS.forEach(p => { periodMap[p] = null; periodObserverCounts[p] = new Set(); });
+  dayRows.forEach(r => {
+    if (!PERIODS.includes(r.period)) return;
+    if (r.observer) periodObserverCounts[r.period].add(r.observer);
+    const existing = periodMap[r.period];
+    if (!existing || (r.submitted_at || '') > (existing.submitted_at || '')) {
+      periodMap[r.period] = r;
+    }
+  });
+
+  const logged = dayRows.filter(r => PERIODS.includes(r.period));
+  const skipped = logged.filter(r => r.attendance === 'Skipped').length;
+  const late = logged.filter(r => r.attendance === 'Late').length;
+  const absent = logged.filter(r => r.attendance === 'Absent/sick').length;
+  const incidents = logged.filter(r => r.incident_occurred === 'Yes').length;
+
+  document.getElementById('stat-periods').textContent = logged.length;
+  document.getElementById('stat-skipped').textContent = skipped;
+  document.getElementById('stat-late').textContent = late;
+  document.getElementById('stat-absent').textContent = absent;
+  document.getElementById('stat-incidents').textContent = incidents;
+  document.getElementById('summary-bar').classList.add('visible');
+
+  const missing = PERIODS.filter(p => !periodMap[p]);
+  const multiObserverPeriods = PERIODS.filter(p => periodObserverCounts[p].size > 1);
+  let warnings = [];
+  if (missing.length > 0) warnings.push(`No data for: ${missing.join(', ')}`);
+  if (multiObserverPeriods.length > 0) warnings.push(`Multiple observers logged the same period for: ${multiObserverPeriods.join(', ')} — showing most recent entry for each`);
+  if (warnings.length > 0) {
+    wb.textContent = `⚠ ${warnings.join(' | ')}`;
+    wb.classList.add('visible');
+  } else { wb.classList.remove('visible'); }
+
+  const output = document.getElementById('report-output');
+  output.innerHTML = '';
+
+  PERIODS.forEach(p => {
+    const row = periodMap[p];
+    const attendance = row?.attendance;
+    let badgeClass = 'badge-empty', badgeText = 'No data';
+    if (attendance === 'Skipped') { badgeClass = 'badge-skipped'; badgeText = 'Skipped'; }
+    else if (attendance === 'Absent/sick') { badgeClass = 'badge-absent'; badgeText = 'Absent/sick'; }
+    else if (attendance === 'Late') { badgeClass = 'badge-late'; badgeText = 'Late'; }
+    else if (attendance === 'Present') { badgeClass = 'badge-present'; badgeText = 'Present'; }
+
+    const headerLabel = row?.observer ? `${p} <span style="opacity:.7;font-weight:400">— ${row.observer}</span>` : p;
+    const card = document.createElement('div');
+    card.className = 'period-card';
+    card.innerHTML = `<div class="period-card-header">${headerLabel}<span class="period-badge ${badgeClass}">${badgeText}</span></div><div class="period-card-body"></div>`;
+    output.appendChild(card);
+    const body = card.querySelector('.period-card-body');
+
+    if (!row) { body.innerHTML = '<div class="empty-period">No data logged.</div>'; return; }
+    if (attendance === 'Skipped' || attendance === 'Absent/sick') return;
+
+    if (row.arrival_time) body.appendChild(dr('Arrival time', row.arrival_time));
+    if (row.intervals) body.appendChild(dr(`On-task intervals${row.class_duration ? ' (' + row.class_duration + ' min)' : ''}`, row.intervals));
+    if (row.phone) body.appendChild(dr('Phone use', row.phone));
+    if (row.phone_log) body.appendChild(dr('Phone interaction', row.phone_log, true));
+    if (row.sounds) body.appendChild(dr('Disruptive sounds', row.sounds));
+
+    // Sound details
+    const soundParts = [];
+    if (row.sound_clapping === 'Yes') soundParts.push(`Clapping${row.sound_clapping_count ? ' ×' + row.sound_clapping_count : ''}`);
+    if (row.sound_vocalization === 'Yes') soundParts.push(`Vocalizations${row.sound_vocalization_count ? ' ×' + row.sound_vocalization_count : ''}`);
+    if (row.sound_blurts === 'Yes') soundParts.push(`Blurts${row.sound_blurts_count ? ' ×' + row.sound_blurts_count : ''}`);
+    if (row.sound_other === 'Yes' && row.sound_other_desc) soundParts.push(row.sound_other_desc);
+    if (soundParts.length) body.appendChild(dr('Sound types', soundParts.join(', ')));
+
+    if (row.comments) body.appendChild(dr('Disruptive comments', row.comments));
+    if (row.comments_count) body.appendChild(dr('Comment count', row.comments_count));
+    if (row.comments_log) body.appendChild(dr('Comments logged', row.comments_log, true));
+    if (row.tasks) body.appendChild(dr('Tasks completed', row.tasks));
+    if (row.arguing) body.appendChild(dr('Arguing', row.arguing));
+    if (row.task_narrative) body.appendChild(dr('Task notes', row.task_narrative, true));
+    if (row.observations) body.appendChild(dr('Observations', row.observations, true));
+
+    if (row.incident_occurred === 'Yes') {
+      const inc = document.createElement('div');
+      inc.className = 'incident-section';
+      inc.innerHTML = '<div class="incident-title">⚠ Incident</div>';
+      if (row.regulation) inc.appendChild(dr('Emotional regulation', row.regulation));
+      if (row.elopement_time) inc.appendChild(dr('Elopement time', row.elopement_time));
+      if (row.antecedent) inc.appendChild(dr('Antecedent', row.antecedent, true));
+      if (row.behavior) inc.appendChild(dr('Behavior', row.behavior, true));
+      if (row.consequence) inc.appendChild(dr('Consequence', row.consequence, true));
+      if (row.incident_time) inc.appendChild(dr('Incident time', row.incident_time));
+      body.appendChild(inc);
+    }
+  });
+
+  // Email body
+  const dateStr = new Date(reportDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const studentLabel = distinctStudents[0] || studentFilter || currentStudent();
+  let email = `Daily Report for ${studentLabel} — ${dateStr}:\n\n`;
+  email += `Periods skipped: ${skipped}\nLate arrivals: ${late}\nAbsent/sick: ${absent}\n`;
+  email += `Student grades: https://ps.seattleschools.org/public/\n\n`;
+  if (missing.length) email += `*** Warning: No data for: ${missing.join(', ')} ***\n\n`;
+
+  PERIODS.forEach(p => {
+    email += '='.repeat(30) + '\n' + p + '\n' + '='.repeat(30) + '\n';
+    const row = periodMap[p];
+    if (!row) { email += '\n'; return; }
+    const att = row.attendance;
+    if (att === 'Skipped' || att === 'Absent/sick') { email += `${att}\n\n`; return; }
+    if (row.arrival_time) email += `Arrival time:\n${row.arrival_time}\n\n`;
+    if (row.intervals) email += `On-task intervals${row.class_duration ? ' (' + row.class_duration + ' min)' : ''}:\n${row.intervals}\n\n`;
+    if (row.phone) email += `Phone use:\n${row.phone}\n\n`;
+    if (row.phone_log) email += `Phone interaction:\n${row.phone_log}\n\n`;
+    if (row.sounds) email += `Disruptive sounds:\n${row.sounds}\n\n`;
+    const sp = [];
+    if (row.sound_clapping === 'Yes') sp.push(`Clapping${row.sound_clapping_count ? ' ×' + row.sound_clapping_count : ''}`);
+    if (row.sound_vocalization === 'Yes') sp.push(`Vocalizations${row.sound_vocalization_count ? ' ×' + row.sound_vocalization_count : ''}`);
+    if (row.sound_blurts === 'Yes') sp.push(`Blurts${row.sound_blurts_count ? ' ×' + row.sound_blurts_count : ''}`);
+    if (row.sound_other === 'Yes' && row.sound_other_desc) sp.push(row.sound_other_desc);
+    if (sp.length) email += `Sound types:\n${sp.join(', ')}\n\n`;
+    if (row.comments) email += `Disruptive comments:\n${row.comments}\n\n`;
+    if (row.comments_count) email += `Comment count:\n${row.comments_count}\n\n`;
+    if (row.comments_log) email += `Comments:\n${row.comments_log}\n\n`;
+    if (row.tasks) email += `Tasks completed:\n${row.tasks}\n\n`;
+    if (row.arguing) email += `Arguing:\n${row.arguing}\n\n`;
+    if (row.task_narrative) email += `Task notes:\n${row.task_narrative}\n\n`;
+    if (row.observations) email += `Observations:\n${row.observations}\n\n`;
+    if (row.incident_occurred === 'Yes') {
+      email += '--- Incident ---\n';
+      if (row.regulation) email += `Emotional regulation:\n${row.regulation}\n\n`;
+      if (row.elopement_time) email += `Elopement time:\n${row.elopement_time}\n\n`;
+      if (row.antecedent) email += `Antecedent:\n${row.antecedent}\n\n`;
+      if (row.behavior) email += `Behavior:\n${row.behavior}\n\n`;
+      if (row.consequence) email += `Consequence:\n${row.consequence}\n\n`;
+      if (row.incident_time) email += `Incident time:\n${row.incident_time}\n\n`;
+    }
+  });
+
+  document.getElementById('email-body').value = email;
+  document.getElementById('email-section').classList.add('visible');
+}
+
+function dr(label, value, isNarrative) {
+  const div = document.createElement('div');
+  div.className = 'data-row';
+  div.innerHTML = `<span class="data-label">${label}</span><span class="data-value${isNarrative ? ' narrative' : ''}">${value}</span>`;
+  return div;
+}
+
+function copyEmail() {
+  const ta = document.getElementById('email-body');
+  ta.select();
+  document.execCommand('copy');
+  const s = document.getElementById('copy-status');
+  s.textContent = '✓ Copied!';
+  setTimeout(() => s.textContent = '', 2000);
+}
+</script>
+</body>
+</html>
