@@ -1,0 +1,8 @@
+submitted_at,student,observer,date,period,attendance,intervals,class_duration,incident_occurred,antecedent,behavior,consequence,comments_count,tasks,arguing
+2026-06-22T08:05:00Z,Jordan,Ms. Reyes,2026-06-22,P1,On time,✓✓✓✗✓,50,No,,,,,,
+2026-06-22T09:10:00Z,Jordan,Ms. Reyes,2026-06-22,P2,On time,✓✓✗✗✓,50,Yes,Asked to put phone away,Refused twice and left seat,Redirected by aide; returned after 3 min,1,Some,No
+2026-06-23T08:05:00Z,Jordan,Ms. Reyes,2026-06-23,P1,Tardy,✓✓✓✓✓,50,No,,,,,,
+2026-06-24T08:05:00Z,Jordan,Ms. Reyes,2026-06-24,P1,On time,✓✓✓✓✗,50,No,,,,,,
+2026-07-13T08:05:00Z,Jordan,Ms. Reyes,2026-07-13,P1,On time,✓✓✓✓✓,50,No,,,,,,
+2026-07-14T08:05:00Z,Jordan,Ms. Reyes,2026-07-14,P1,On time,✓✗✓✓✓,50,No,,,,,,
+2026-07-14T09:10:00Z,Jordan,Ms. Reyes,2026-07-14,P2,On time,✓✓✓✓✓,50,Yes,Peer commented on his work,Loud verbal outburst,"Removed to hallway 5 min, calm on return",2,All,Yes
