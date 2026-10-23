@@ -263,6 +263,8 @@
 
   #submit-status { font-size: 13px; color: var(--success); font-weight: 600; }
   #submit-status.error { color: var(--danger); }
+  .file-link { margin-top: 10px; font-size: 12.5px; color: var(--text-muted); }
+  .file-link .btn { padding: 3px 10px; font-size: 12px; margin-left: 8px; }
 
   /* Toast */
   #toast {
@@ -630,6 +632,7 @@
     <button type="submit" class="btn btn-primary">Log Period</button>
     <span id="submit-status"></span>
   </div>
+  <div id="file-link" class="file-link"></div>
 
 </form>
 </div><!-- end log-section -->
@@ -836,7 +839,7 @@ function triggerDownload(content, filename) {
 // ============================================================
 // Form submission
 // ============================================================
-document.getElementById('log-form').addEventListener('submit', function(e) {
+document.getElementById('log-form').addEventListener('submit', async function(e) {
   e.preventDefault();
 
   const fd = new FormData(this);
@@ -848,17 +851,15 @@ document.getElementById('log-form').addEventListener('submit', function(e) {
 
   if (!period) { showStatus('Please select a period.', true); return; }
 
-  // Append to localStorage and download
-  const storageKey = `csv_${studentName}`;
-  let existing = localStorage.getItem(storageKey) || '';
-  if (!existing) existing = CSV_HEADERS.join(',') + '\n';
-  existing += rowToCSV(row) + '\n';
-  localStorage.setItem(storageKey, existing);
-  triggerDownload(existing, `${studentName}_behavior_log.csv`);
+  const submitBtn = this.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  let saved;
+  try { saved = await saveRow(studentName, row); }
+  finally { submitBtn.disabled = false; }
 
   setLoggedPeriod(period, (attendance === 'Present' || attendance === 'Late') ? 'logged' : attendance);
   renderTracker();
-  showToast(`${period} logged`);
+  showToast(saved.where === 'file' ? `${period} logged` : `${period} logged (downloaded copy)`);
 
   const dateVal = document.getElementById('date').value;
   this.reset();
@@ -870,8 +871,247 @@ document.getElementById('log-form').addEventListener('submit', function(e) {
   ['phone-detail','sounds-detail','comments-detail'].forEach(id => {
     document.getElementById(id)?.classList.remove('visible');
   });
-  document.getElementById('submit-status').textContent = '';
+  if (saved.note) showStatus(saved.note, true); else document.getElementById('submit-status').textContent = '';
 });
+
+// ============================================================
+// Saving: one file per student per day, plus a "final" copy at day's end
+// Files are named  <Student>_behavior_log_<YYYY-MM-DD>.csv  and hold that day's periods.
+// Chrome/Edge overwrite the same day-file on every log (you pick it once per day);
+// other browsers download a complete copy each time (browser adds (1), (2), ...; the newest
+// has the whole day). "Finish day" saves one complete  ..._<date>_final.csv  to keep.
+// The browser also keeps a running copy of every day for this student as a safety net.
+// ============================================================
+const FS_SUPPORTED = typeof window.showSaveFilePicker === 'function';
+const linkedHandles = new Map();
+
+function currentStudent() { return studentName; }
+function localToday() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function currentDate() {
+  const el = document.getElementById('date');
+  return (el && el.value) || localToday();
+}
+function fileKey(student, day) { return student + '|' + day; }
+function fileName(student, day, isFinal) {
+  return `${student || 'student'}_behavior_log_${day}${isFinal ? '_final' : ''}.csv`;
+}
+const CSV_TYPES = [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }];
+
+// Proper CSV reader: handles quoted commas, quotes and line breaks inside fields.
+function parseCSVRecords(text) {
+  const records = []; let rec = [], cur = '', q = false;
+  text = String(text || '').replace(/^﻿/, '');
+  const flush = () => { rec.push(cur); cur = ''; if (rec.length > 1 || rec[0] !== '') records.push(rec); rec = []; };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { rec.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; flush(); }
+    else cur += c;
+  }
+  if (cur !== '' || rec.length) flush();
+  return records;
+}
+
+function rowsFromCSVText(text) {
+  const recs = parseCSVRecords(text);
+  if (recs.length < 2) return [];
+  const headers = recs[0].map(h => h.trim());
+  return recs.slice(1).map(r => {
+    const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o;
+  });
+}
+
+// Combine row lists, dropping duplicates (same submitted_at), oldest first.
+function mergeRows(...lists) {
+  const seen = new Set(), out = [];
+  lists.flat().forEach(r => {
+    const key = r.submitted_at || JSON.stringify(r);
+    if (seen.has(key)) return;
+    seen.add(key); out.push(r);
+  });
+  out.sort((a, b) => String(a.submitted_at || '').localeCompare(String(b.submitted_at || '')));
+  return out;
+}
+
+function buildCSV(rows) {
+  return CSV_HEADERS.join(',') + '\n' + rows.map(rowToCSV).join('\n') + (rows.length ? '\n' : '');
+}
+
+// Remember each day's chosen file between visits (permission is re-confirmed on the next log).
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('behaviorlog_files', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('h');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbGet(key) {
+  try {
+    const db = await idbOpen();
+    return await new Promise(res => {
+      const q = db.transaction('h').objectStore('h').get(key);
+      q.onsuccess = () => res(q.result || null); q.onerror = () => res(null);
+    });
+  } catch { return null; }
+}
+async function idbSet(key, val) {
+  try {
+    const db = await idbOpen();
+    await new Promise(res => {
+      const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(val, key);
+      t.oncomplete = res; t.onerror = res;
+    });
+  } catch { /* remembering the file is a convenience, not required */ }
+}
+
+async function getLinkedHandle(key) {
+  const h = linkedHandles.get(key) || await idbGet(key);
+  if (!h) return null;
+  try {
+    let perm = await h.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await h.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return null;
+  } catch { return null; }
+  linkedHandles.set(key, h);
+  return h;
+}
+
+async function linkFile(student, day) {
+  const h = await window.showSaveFilePicker({ suggestedName: fileName(student, day, false), types: CSV_TYPES });
+  const key = fileKey(student, day);
+  linkedHandles.set(key, h);
+  await idbSet(key, h);
+  refreshFileLinkUI();
+  return h;
+}
+
+async function writeHandle(h, text) {
+  const w = await h.createWritable();
+  try { await w.write(text); await w.close(); }
+  catch (e) { try { await w.abort(); } catch {} throw e; }
+}
+
+// Save one logged row. Returns { where: 'file' | 'download', name?, note? }.
+async function saveRow(student, row) {
+  const day = row.date || currentDate();
+  const storageKey = `csv_${student}`;
+  const allLocal = rowsFromCSVText(localStorage.getItem(storageKey) || '');   // every day, this browser
+  const localDay = allLocal.filter(r => r.date === day);
+  const remember = rows => localStorage.setItem(storageKey, buildCSV(mergeRows(allLocal, rows)));
+  let note = '';
+
+  if (FS_SUPPORTED) {
+    try {
+      let h = await getLinkedHandle(fileKey(student, day));
+      if (!h) h = await linkFile(student, day);
+      const fileRows = rowsFromCSVText(await (await h.getFile()).text());
+      let base = fileRows;
+      if (fileRows.length === 0) {
+        base = localDay;                        // new/empty file: start from this browser's copy of the day
+      } else {
+        const have = new Set(fileRows.map(r => r.submitted_at));
+        const extra = localDay.filter(r => !have.has(r.submitted_at));
+        if (extra.length && confirm(
+          `This browser has ${extra.length} logged row(s) for ${student} on ${day} that are not in ${h.name} ` +
+          `(it may be an older copy). Add them to the file?`)) base = fileRows.concat(extra);
+      }
+      const rows = mergeRows(base, [row]);
+      await writeHandle(h, buildCSV(rows));     // the file keeps everything it already had
+      remember(rows);
+      refreshFileLinkUI();
+      return { where: 'file', name: h.name };
+    } catch (err) {
+      if (err && err.name === 'AbortError') note = 'No file chosen, so a copy was downloaded instead.';
+      else { console.warn(err); note = 'Could not write to the linked file (is it open in Excel?). A copy was downloaded instead.'; }
+    }
+  }
+
+  const dayRows = mergeRows(localDay, [row]);
+  remember(dayRows);
+  triggerDownload(buildCSV(dayRows), fileName(student, day, false));
+  return { where: 'download', note };
+}
+
+// End of day (or early dismissal): one complete file for the date, named ..._final.csv
+async function saveFinal(student, day) {
+  let rows = rowsFromCSVText(localStorage.getItem(`csv_${student}`) || '').filter(r => r.date === day);
+  if (FS_SUPPORTED) {                           // also pick up anything only in today's linked file
+    try {
+      const h = linkedHandles.get(fileKey(student, day)) || await idbGet(fileKey(student, day));
+      if (h && (await h.queryPermission({ mode: 'read' })) === 'granted') {
+        rows = mergeRows(rows, rowsFromCSVText(await (await h.getFile()).text()).filter(r => r.date === day));
+      }
+    } catch { /* fall back to this browser's copy */ }
+  }
+  rows = mergeRows(rows);
+  if (!rows.length) return { where: 'none' };
+  const text = buildCSV(rows), name = fileName(student, day, true);
+  const periods = rows.map(r => r.period).filter(Boolean).join(', ');
+  if (FS_SUPPORTED) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: name, types: CSV_TYPES });
+      await writeHandle(h, text);
+      return { where: 'file', name: h.name, count: rows.length, periods };
+    } catch (err) {
+      if (err && err.name === 'AbortError') return { where: 'cancelled' };
+      console.warn(err);
+    }
+  }
+  triggerDownload(text, name);
+  return { where: 'download', name, count: rows.length, periods };
+}
+
+async function finishDay() {
+  const student = currentStudent(), day = currentDate();
+  if (!student) { showStatus('Enter the student name first.', true); return; }
+  const res = await saveFinal(student, day);
+  if (res.where === 'none') showStatus(`No periods logged for ${day} yet.`, true);
+  else if (res.where === 'cancelled') showStatus('Cancelled. Nothing saved.', true);
+  else showStatus(`Final saved for ${day}: ${res.count} period(s) (${res.periods}) as ${res.name}. ` +
+                  `Other copies of that day can be deleted.`, false);
+}
+
+async function refreshFileLinkUI() {
+  const el = document.getElementById('file-link');
+  if (!el) return;
+  el.textContent = '';
+  const student = currentStudent(), day = currentDate();
+
+  const line = document.createElement('div');
+  if (!FS_SUPPORTED) {
+    line.textContent = `This browser downloads a complete copy after every log, named ${fileName(student, day, false)} ` +
+      `(then (1), (2)...). The newest copy of the day has everything. Chrome or Edge can save to one file instead.`;
+  } else {
+    const h = linkedHandles.get(fileKey(student, day)) || await idbGet(fileKey(student, day));
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn btn-secondary';
+    btn.textContent = h ? 'Change file' : 'Link file now';
+    btn.addEventListener('click', async () => {
+      try { await linkFile(student, day); } catch (e) { /* cancelled */ }
+    });
+    line.append(h ? `${day}: saving to ${h.name} ` : `${day}: not linked yet. You will be asked to pick a file on your first log. `, btn);
+  }
+  el.appendChild(line);
+
+  const fin = document.createElement('div');
+  fin.style.marginTop = '8px';
+  const fbtn = document.createElement('button');
+  fbtn.type = 'button'; fbtn.className = 'btn btn-secondary';
+  fbtn.textContent = 'Finish day: save final copy';
+  fbtn.addEventListener('click', finishDay);
+  fin.append(fbtn, ' Press after the last period (or at early dismissal). Saves one complete file for the day; the other copies can then be deleted.');
+  el.appendChild(fin);
+}
+document.getElementById('date')?.addEventListener('change', refreshFileLinkUI);
+refreshFileLinkUI();
 
 function showStatus(msg, isError) {
   const el = document.getElementById('submit-status');
@@ -916,14 +1156,8 @@ function loadFile(file) {
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  return lines.slice(1).map(line => {
-    const vals = splitCSVLine(line);
-    const row = {};
-    headers.forEach((h, i) => { row[h] = (vals[i] || '').trim().replace(/^"|"$/g, ''); });
-    return row;
+  return rowsFromCSVText(text).map(r => {
+    const o = {}; Object.keys(r).forEach(k => { o[k] = String(r[k]).trim(); }); return o;
   });
 }
 

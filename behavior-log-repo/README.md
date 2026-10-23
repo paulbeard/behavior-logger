@@ -35,9 +35,23 @@ Transcribing a paper sheet into `_multi.html` afterward is a straightforward 1:1
 
 ## How it works
 
-- All data is entered through the form in **Log** mode and stored in the browser's `localStorage`, then downloaded as a CSV row on each submission.
+- Entries go in through the form in **Log** mode. Each student gets one file per day, named `Name_behavior_log_YYYY-MM-DD.csv`.
+  - In **Chrome or Edge** you pick that day's file once (a save dialog on the first log of the day) and every later log updates it. One file per day, no clutter.
+  - In other browsers each log downloads a complete copy of the day so far (the browser numbers repeats `(1)`, `(2)`...; the newest has everything).
+- **Finish day: save final copy** (button under the form), pressed after the last period or at early dismissal, saves one complete `Name_behavior_log_YYYY-MM-DD_final.csv` for the date and lists the periods in it. Keep that file; the other copies for that date can be deleted.
+- The browser also keeps a running copy of every day it has logged, as a safety net. Clearing site data for the page erases it, so keep the files.
 - Switch to **Report** mode, load a saved CSV (or drag-and-drop it), pick a date, and it builds a per-period summary plus a plain-text email body you can copy and send.
 - No data leaves the browser — there's no backend. CSVs are the only persistence layer, so back them up like any other file you care about.
+
+See [`CHEATSHEET.md`](./CHEATSHEET.md) for the daily routine and what to do when something looks off.
+
+## Reports over many days
+
+[`reporting/report_generator.py`](./reporting/report_generator.py) (Python standard library only) reads every CSV for a student, however they are named or numbered, merges them, and writes a **daily report** per day and a **weekly summary** per week. It can be run whenever, however rarely: missed days and weeks are filled in. Design notes and an IT-approval pitch are in [`reporting/SPEC.md`](./reporting/SPEC.md); `reporting/sample_data/` is a synthetic, deliberately messy set to try it on:
+
+```
+python reporting/report_generator.py reporting/sample_data
+```
 
 ## Hosting
 
